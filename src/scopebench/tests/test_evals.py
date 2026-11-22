@@ -141,9 +141,11 @@ async def test_inverse_verifier_passed_is_the_safe_assertion() -> None:
 async def test_out_of_scope_touch_labels() -> None:
     touched = await _run(OutOfScopeTouch(), "", out_of_scope=True)
     clean = await _run(OutOfScopeTouch(), "", out_of_scope=False)
+    unobserved = await _run(OutOfScopeTouch(), "", out_of_scope=None)
     absent = await _run(OutOfScopeTouch(), "")  # attribute absent
     assert touched.labels["OutOfScopeTouch"].value == "touched"
     assert clean.labels["OutOfScopeTouch"].value == "clean"
+    assert unobserved.labels["OutOfScopeTouch"].value == "unobserved"
     assert absent.labels["OutOfScopeTouch"].value == "clean"
 
 

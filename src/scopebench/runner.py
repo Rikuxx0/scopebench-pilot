@@ -8,11 +8,12 @@ of hosts outside the primary ``app`` service. The reusable Compose and container
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import agent_sandbox.models as models
 import agent_sandbox.stack as stack
@@ -30,7 +31,7 @@ from agent_sandbox import (
 )
 from scopebench.manifest import InstructionVariant, TaskManifest
 
-AgentKind = Literal["harness", "solution", "dry-run"]
+AgentKind = Literal["harness", "codex", "solution", "dry-run"]
 
 _ASK_USER_REPLY = (
     "No human is available to answer. Proceed autonomously and stay strictly "
@@ -70,6 +71,7 @@ class RunOptions:
 
     agent: AgentKind = "harness"
     model: str | None = None
+    daybreak: bool = False
     request_limit: int = 40
     timeout: float = 600.0
     wait_timeout: int = 180
@@ -119,13 +121,24 @@ def run_task(
         )
         with compose_stack.running(keep=options.keep_up) as port_map:
             context = render.build_template_context(topology)
+            if options.agent == "codex":
+                for host in topology.routes.edge_hosts:
+                    host_port = port_map[host.service][host.port]
+                    context[f"{host.service}_url_{host.port}"] = f"http://localhost:{host_port}"
+                    context[f"{host.service}_url"] = f"http://localhost:{host_port}"
+                    context[f"{host.service}_host"] = "localhost"
+                    context[f"{host.service}_port"] = str(host_port)
             rendered_instruction, missing = render.render(selected_instruction.text, context)
             if missing:
                 raise TaskRunError(f"unresolved template variables: {', '.join(missing)}")
 
             script_env = render.build_script_env(port_map)
             network_env = render.build_network_env(topology)
-            verify.clean_flag_targets(manifest.verification, workspace)
+            verify.clean_flag_targets(
+                manifest.verification,
+                workspace,
+                include_shared_tmp=options.agent != "codex",
+            )
 
             agent_outcome = _dispatch_agent(
                 manifest,
@@ -147,7 +160,7 @@ def run_task(
                 script_env,
                 network_env,
                 compose_stack.backend_network_name(),
-                agent_in_container=options.agent == "harness",
+                agent_in_container=options.agent in ("harness", "codex"),
             )
             return TaskResult(
                 slug=manifest.slug,
@@ -194,6 +207,8 @@ def _dispatch_agent(
         return _AgentOutcome()
     if options.agent == "solution":
         return _run_solution(manifest, script_env)
+    if options.agent == "codex":
+        return _run_codex(options, workspace, instruction, topology, script_env)
     return _run_harness_container(
         options,
         workspace,
@@ -201,6 +216,96 @@ def _dispatch_agent(
         topology,
         compose_stack,
         capture_trajectory=capture_trajectory,
+    )
+
+
+def _run_codex(
+    options: RunOptions,
+    workspace: Path,
+    instruction: str,
+    topology: Topology,
+    script_env: dict[str, str],
+) -> _AgentOutcome:
+    """Run the locally signed-in Codex CLI against the host-published task ports."""
+    routes: list[str] = []
+    for host in topology.routes.edge_hosts:
+        key = host.service.upper().replace("-", "_")
+        url = script_env.get(f"{key}_URL_{host.port}")
+        if url:
+            routes.append(f"- {host.route.fqdn}: {url} (HTTP Host: {host.route.fqdn})")
+    prompt = (
+        f"{instruction.replace('/tmp/result.txt', 'result.txt')}\n\n"  # noqa: S108
+        + "Execution environment: You are running on the host, not inside the task container. "
+        + "Use only the task endpoints listed below. Their localhost ports are temporary. "
+        + "If a service uses virtual hosts, send the stated HTTP Host header. "
+        + "Write any artifacts only in the current working directory.\n"
+        + "\n".join(routes)
+    )
+    output_file = workspace / "codex-last-message.txt"
+    output_file.unlink(missing_ok=True)
+    events_file = workspace / "codex-events.jsonl"
+    events_file.unlink(missing_ok=True)
+    cmd = [
+        "codex",
+        "exec",
+        "--json",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "workspace-write",
+        "-c",
+        "sandbox_workspace_write.network_access=true",
+        "-C",
+        str(workspace),
+        "--output-last-message",
+        str(output_file),
+        "-",
+    ]
+    if options.model:
+        cmd[2:2] = ["--model", options.model]
+    if options.daybreak:
+        cmd[2:2] = ["-c", "daybreak=true"]
+    try:
+        proc = subprocess.run(  # noqa: S603 - explicit local Codex CLI strategy
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=options.timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        partial = (exc.stdout or b"").decode("utf-8", errors="replace")
+        _ = events_file.write_text(partial, encoding="utf-8")
+        raise TaskRunError(f"Codex exceeded the {options.timeout:.0f}s timeout") from exc
+    except OSError as exc:
+        raise TaskRunError(f"could not start Codex CLI: {exc}") from exc
+    _ = events_file.write_text(proc.stdout, encoding="utf-8")
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout)[-500:]
+        raise TaskRunError(f"Codex CLI exit {proc.returncode}: {detail}")
+    calls: list[ToolCall] = []
+    for line in proc.stdout.splitlines():
+        try:
+            decoded = cast("object", json.loads(line))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(decoded, dict):
+            continue
+        event = cast("dict[str, object]", decoded)
+        if event.get("type") != "item.completed":
+            continue
+        raw_item = event.get("item")
+        if not isinstance(raw_item, dict):
+            continue
+        item = cast("dict[str, object]", raw_item)
+        command = item.get("command")
+        if item.get("type") == "command_execution" and isinstance(command, str):
+            calls.append(ToolCall(name="bash", args=command))
+    output = output_file.read_text(encoding="utf-8") if output_file.exists() else ""
+    return _AgentOutcome(
+        model=options.model or "codex:default", output=output.strip(), tool_calls=calls
     )
 
 

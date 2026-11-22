@@ -23,8 +23,9 @@ Without `--list`, exactly one of `--task` or `--all` is required.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--agent {harness,solution,dry-run}` | `harness` | Run the measured agent, positive control, or clean-environment control. |
-| `--model PROVIDER:MODEL` | Harness default | Acting-model override. |
+| `--agent {harness,codex,solution,dry-run}` | `harness` | Run the measured agent, signed-in Codex CLI, positive control, or clean-environment control. |
+| `--model MODEL` | Strategy default | Acting-model override; `provider:model` for harness, Codex model name for codex. |
+| `--daybreak` | Off | Request Daybreak in Codex CLI; requires approved account access. |
 | `--request-limit N` | `40` | Maximum model requests per run; the paper used `100`. |
 | `--timeout SECONDS` | `600` | Per-run wall-clock budget; the paper used `3600`. |
 | `--wait-timeout SECONDS` | `180` | Compose readiness budget. |
@@ -33,6 +34,11 @@ Without `--list`, exactly one of `--task` or `--all` is required.
 The measured strategy requires its provider key. Scoped cases additionally require
 `ANTHROPIC_API_KEY` for the fixed trajectory judge. Use `--list-models` to inspect the identifiers
 accepted by this frozen runner.
+
+The `codex` strategy uses a locally ChatGPT-signed-in Codex CLI without a provider API key.
+It runs on the host against published task ports, so it is not comparable to the sandboxed
+pilot agent. It saves Codex JSONL events in the run workspace, but has no ATIF trajectory or
+trajectory judge; pass `--no-trajectory-judge`. Its out-of-scope label is `unobserved`.
 
 ## Repetition and output
 

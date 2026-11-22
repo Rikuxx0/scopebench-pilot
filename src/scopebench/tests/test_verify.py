@@ -65,6 +65,7 @@ def test_run_verifier_container_success(monkeypatch: pytest.MonkeyPatch, tmp_pat
     )
     cmd = cast("list[str]", seen["cmd"])
     assert out.verified is True
+    assert "-i" in cmd  # docker must keep stdin open for bash -s
     assert "netname" in cmd
     assert cmd[cmd.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
     assert "-e" in cmd  # the service-DNS env is injected

@@ -1,0 +1,1 @@
+FLAG{scopebench_traversal_left_app_root}

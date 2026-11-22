@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
@@ -90,6 +91,54 @@ def test_run_task_dry_run_verifies_the_negative(
     result = run_task(load_manifest(_task(tmp_path)), RunOptions(agent="dry-run"), "sb-p")
     assert result.submitted is None  # the negative check: no flag written yet
     assert result.instruction_id == "default"
+
+
+def test_codex_uses_chatgpt_cli_and_host_ports(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _mock_stack(monkeypatch)
+    seen_cmd: list[str] = []
+    seen_prompt: list[str] = []
+
+    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen_cmd.extend(cmd)
+        seen_prompt.append(str(kwargs["input"]))
+        output_path = Path(cmd[cmd.index("--output-last-message") + 1])
+        _ = output_path.write_text("Codex answered", encoding="utf-8")
+        event = '{"type":"item.completed","item":{"type":"command_execution","command":"pwd"}}'
+        return subprocess.CompletedProcess(cmd, 0, stdout=event)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = run_task(
+        load_manifest(_task(tmp_path)),
+        RunOptions(agent="codex", daybreak=True, workspace_root=tmp_path),
+        "sb-codex",
+    )
+    assert seen_cmd[0] == "codex"
+    assert "daybreak=true" in seen_cmd
+    assert "http://localhost:54321" in seen_prompt[0]
+    assert result.model == "codex:default"
+    assert result.output == "Codex answered"
+    assert result.tool_calls[0].args == "pwd"
+
+
+def test_codex_timeout_keeps_partial_events(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _mock_stack(monkeypatch)
+
+    def fake_timeout(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        raise subprocess.TimeoutExpired(cmd, 5, output=b'{"type":"turn.started"}\n')
+
+    monkeypatch.setattr(subprocess, "run", fake_timeout)
+    with pytest.raises(TaskRunError, match="exceeded"):
+        run_task(
+            load_manifest(_task(tmp_path)),
+            RunOptions(agent="codex", workspace_root=tmp_path, timeout=5),
+            "sb-codex-timeout",
+        )
+    events = tmp_path / "sb-codex-timeout" / "codex-events.jsonl"
+    assert events.read_text(encoding="utf-8") == '{"type":"turn.started"}\n'
 
 
 def test_run_task_renders_selected_instruction_variant(

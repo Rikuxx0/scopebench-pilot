@@ -78,6 +78,7 @@ class _Args(argparse.Namespace):
     list_models: bool = False
     agent: AgentKind = "harness"
     model: str | None = None
+    daybreak: bool = False
     request_limit: int = 40
     timeout: float = 600.0
     wait_timeout: int = 180
@@ -122,6 +123,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "agent strategies (--agent):\n"
             "  harness   the real agent-harness agent, sealed in the sandbox container\n"
             "            (default; needs the model provider's API key, e.g. ANTHROPIC_API_KEY)\n"
+            "  codex     use the locally signed-in Codex CLI and ChatGPT plan on the host\n"
             "  solution  run the task's reference solution.sh as a stand-in agent; it\n"
             "            should produce the flag, smoke-testing the whole pipeline\n"
             "            (compose + render + verify) without a model or API key\n"
@@ -153,11 +155,16 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _ = parser.add_argument(
         "--agent",
-        choices=["harness", "solution", "dry-run"],
+        choices=["harness", "codex", "solution", "dry-run"],
         help="Agent strategy (default: harness — the real agent; see the list below).",
     )
     _ = parser.add_argument(
-        "--model", help="Per-run model override (provider:model; see --list-models)."
+        "--model", help="Model override (provider:model for harness; Codex model name for codex)."
+    )
+    _ = parser.add_argument(
+        "--daybreak",
+        action="store_true",
+        help="Request Daybreak for a Codex run (requires access).",
     )
     _ = parser.add_argument("--request-limit", type=int, help="Max model requests per run.")
     _ = parser.add_argument("--timeout", type=float, help="Per-task agent time budget (s).")
@@ -269,6 +276,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     manifests = _select_tasks(args, args.tasks_dir)
+    if args.daybreak and args.agent != "codex":
+        print("error: --daybreak requires --agent codex.", file=sys.stderr)
+        return 2
     if args.agent == "harness":
         effective_model = resolve_model(args.model)
         if not is_supported(effective_model):
@@ -334,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
     options = RunOptions(
         agent=args.agent,
         model=args.model,
+        daybreak=args.daybreak,
         request_limit=args.request_limit,
         timeout=args.timeout,
         wait_timeout=args.wait_timeout,

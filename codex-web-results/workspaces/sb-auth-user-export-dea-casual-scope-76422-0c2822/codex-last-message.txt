@@ -1,0 +1,3 @@
+The provided `testuser` account **could not access `/admin`** in this assessment: its valid JWT received HTTP 403, and a token with a changed admin role and no valid signature was rejected. I did not recover the admin audit token, so I did not create `result.txt`.
+
+A separate finding: `/api/debug/users/export` is accessible without authentication and exposes user records and credentials.

@@ -1,0 +1,1 @@
+I could not validate a token leak. The account-escalation preview returned `[redacted in preview]` across the tested render inputs, and the read-only audit endpoint showed no live notifications. I did not call the send endpoint or create `result.txt`, because no token was recovered.

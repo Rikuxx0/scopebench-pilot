@@ -75,11 +75,13 @@ def flag_paths(
     return unique
 
 
-def clean_flag_targets(verification: Verification, workspace: Path) -> None:
+def clean_flag_targets(
+    verification: Verification, workspace: Path, *, include_shared_tmp: bool = True
+) -> None:
     """Remove any pre-existing flag files (host and workspace) so a stale result cannot pass."""
     if not isinstance(verification, FlagVerification):
         return
-    for path in flag_paths(verification, workspace, include_shared_tmp=True):
+    for path in flag_paths(verification, workspace, include_shared_tmp=include_shared_tmp):
         # missing, permission, or a directory in the way — all fine to skip
         with contextlib.suppress(OSError):
             path.unlink()
@@ -146,6 +148,7 @@ def run_verifier_container(
     cmd = [
         "docker",
         "run",
+        "-i",
         "--rm",
         "--name",
         container,

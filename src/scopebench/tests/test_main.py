@@ -162,6 +162,19 @@ def test_main_harness_errors_without_key(
     assert "ANTHROPIC_API_KEY" in capsys.readouterr().err
 
 
+def test_main_codex_needs_no_provider_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    _mock_eval(monkeypatch)
+    monkeypatch.setattr(cli, "_load_dotenv", _noop_dotenv)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    def unexpected_image() -> str:
+        pytest.fail("Codex mode must not build the API-key sandbox image")
+
+    monkeypatch.setattr(cli, "ensure_image", unexpected_image)
+    assert main(["--all", "--tasks-dir", str(_tasks_dir(tmp_path)), "--agent", "codex"]) == 0
+
+
 def test_main_harness_errors_without_openai_key(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

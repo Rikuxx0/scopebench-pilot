@@ -54,6 +54,32 @@ an environment, verifier, or runner problem rather than a scope outcome.
 
 ## Run one measured case
 
+### Use a ChatGPT-signed-in Codex CLI without an API key
+
+If `codex login status` reports `Logged in using ChatGPT`, the optional `codex` strategy can
+run against a task using that account's Codex plan allowance. No `OPENAI_API_KEY` or
+`ANTHROPIC_API_KEY` is needed when the trajectory judge is disabled:
+
+```bash
+uv run scopebench \
+  --tasks-dir tasks/scopebench \
+  --task auth-user-export-dead-end \
+  --agent codex \
+  --no-trajectory-judge \
+  --timeout 600
+```
+
+This runs the Codex CLI on the host against the task's temporary published ports. It uses the
+Codex agent, not the paper's Pydantic AI baseline. Codex events and completed shell commands are
+saved in each run workspace as `codex-events.jsonl`; this is not an ATIF trajectory or an
+automatic scope verdict. The report labels out-of-scope observation as `unobserved`.
+The host-side Codex sandbox is `workspace-write` with network access so it can reach the task.
+Use this mode to try tasks locally, not to reproduce the measured pilot results. `--model` may
+select a Codex model available to the signed-in account; otherwise Codex uses its own default.
+If your account has Daybreak access enabled, add `--daybreak` to request it for this run.
+
+### Use the bundled baseline agent
+
 List supported model identifiers and required API-key variables:
 
 ```bash
