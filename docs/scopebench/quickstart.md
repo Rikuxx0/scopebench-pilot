@@ -24,6 +24,53 @@ uv run scopebench --tasks-dir tasks/scopebench --list
 
 The output should contain 30 task directories and three instruction variants per task.
 
+### Windows 11 + Ubuntu WSL2 setup
+
+Run the benchmark CLI in **Ubuntu WSL2** and the task containers in **Docker Desktop's Linux
+Containers**. On **Windows PowerShell (Administrator)**, install or update WSL and confirm that
+Ubuntu reports version 2 (do not reinstall an existing Ubuntu distribution):
+
+```powershell
+wsl --update
+wsl --list --verbose
+```
+
+If Ubuntu is not installed yet, run `wsl --install -d Ubuntu` first and restart Windows if
+prompted.
+
+Install Docker Desktop with its WSL2 backend and enable WSL Integration for Ubuntu. Use Linux
+Containers. Run `docker version` in Ubuntu and check that it shows a Server section; also run
+`docker compose version`. If the Server is absent, check that Docker Desktop is running and
+Ubuntu integration is enabled. Do not install a second Docker Engine inside Ubuntu.
+
+Keep this checkout in the WSL Linux filesystem (for example `~/projects/scopebench-pilot`),
+not under `/mnt/c`: the task containers bind mount files from the checkout. In Ubuntu, install
+Git and `curl`, then install `uv` using its
+[Linux installer](https://docs.astral.sh/uv/getting-started/installation/).
+Install Node.js/npm in Ubuntu and use npm to install the Codex CLI. Check the versions before
+running a task:
+
+```bash
+sudo apt update
+sudo apt install -y git curl ca-certificates nodejs npm
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv python install 3.13
+npm install -g @openai/codex@latest
+mkdir -p ~/projects
+cd ~/projects
+git clone https://github.com/Rikuxx0/scopebench-pilot.git
+cd scopebench-pilot
+uv sync --frozen
+uv run python --version
+codex --version
+git rev-parse HEAD
+```
+
+Open a new Ubuntu shell if `uv` is not yet on `PATH`. ScopeBench needs Python **3.13**; the
+source WSL guide's Python 3.12 minimum applies to ScopeDriftBench, not this repository. Record
+the commit SHA with the experiment results. Do not start another benchmark run or change Docker
+settings while a run is active.
+
 ## Run the controls
 
 The clean-environment control runs no agent:
@@ -77,6 +124,131 @@ The host-side Codex sandbox is `workspace-write` with network access so it can r
 Use this mode to try tasks locally, not to reproduce the measured pilot results. `--model` may
 select a Codex model available to the signed-in account; otherwise Codex uses its own default.
 If your account has Daybreak access enabled, add `--daybreak` to request it for this run.
+
+### Use a local LM Studio model from Ubuntu WSL
+
+The following commands marked **Windows** run in PowerShell; all `bash` commands run in
+**Ubuntu WSL2**. Start LM Studio's Local Server from its Windows Developer screen and load a
+model that supports tool use. Check the GPU model and VRAM before choosing the model and its
+quantization; system RAM alone does not predict inference speed.
+
+On **Windows PowerShell**, check the model installation and loaded state:
+
+```powershell
+lms ls
+lms load
+lms ps
+```
+
+Use the loaded model's exact ID in `--model`. This repo defaults to LM Studio port **1234**;
+the ScopeDriftBench WSL guide uses **1235**. Use the port actually shown by your LM Studio
+server in every URL below.
+
+With Windows 11 22H2 or later,
+[mirrored networking](https://learn.microsoft.com/en-us/windows/wsl/networking) is a convenient
+way to reach the Windows server at `127.0.0.1` from WSL2. In **Windows PowerShell**, open the
+WSL configuration:
+
+```powershell
+notepad "$env:USERPROFILE\.wslconfig"
+```
+
+Add this line under the existing `[wsl2]` section, or create that section if absent. Keep any
+other settings and do not create a second `[wsl2]` section:
+
+```ini
+[wsl2]
+networkingMode=mirrored
+```
+
+Then run `wsl --shutdown` in **Windows PowerShell** and reopen Ubuntu. This stops running WSL
+sessions and Docker's WSL integration, so do it before starting an experiment. Start LM Studio's
+server again if necessary. In **Ubuntu WSL2**, verify the actual HTTP connection first:
+
+```bash
+curl -4 --connect-timeout 3 http://127.0.0.1:1234/v1/models
+```
+
+The response should be JSON with the loaded model ID. If it is not, check the server port,
+whether LM Studio is serving, WSL networking, and Windows Firewall before running ScopeBench.
+Under WSL's NAT networking, `127.0.0.1` may not reach Windows. In Ubuntu, inspect
+`ip route show default` for the Windows gateway, enable LM Studio's network serving for an
+address reachable from WSL, and use `http://<Windows-address>:<port>/v1` instead. Allow only
+the necessary source and port in Windows Firewall. Binding beyond localhost exposes the model
+server to that network, so use a trusted interface or enable authentication.
+
+Check the Responses API that Codex uses from Ubuntu:
+
+```bash
+curl -sS http://127.0.0.1:1234/v1/responses \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"<model-id-from-lm-studio>","input":"Reply with ready."}'
+```
+
+Before a benchmark run, send a **synthetic tool call request** from Ubuntu. This asks the
+model to select a harmless diagnostic function; it does not execute a shell command:
+
+```bash
+curl -sS http://127.0.0.1:1234/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "<model-id-from-lm-studio>",
+    "messages": [{"role": "user", "content": "Call the diagnostic tool with value ping."}],
+    "tools": [{"type": "function", "function": {
+      "name": "diagnostic", "description": "Test tool calling without side effects",
+      "parameters": {"type": "object", "properties": {
+        "value": {"type": "string"}}, "required": ["value"]}
+    }}],
+    "tool_choice": "required"
+  }'
+```
+
+Check `choices[0].message.tool_calls` in the response. If the API rejects the request or the
+model cannot produce a valid tool call, resolve that before running an agent. If you use a
+different URL, change it in this check and in `--lmstudio-url` below. This diagnostic checks
+LM Studio's Chat Completions tool interface; the Codex agent also needs its Responses tool
+interface to work with the selected model. Set enough context for an agent workload (LM Studio
+recommends more than about 25,000 tokens for Codex).
+
+Create a results directory and run one task from **Ubuntu WSL2**:
+
+```bash
+mkdir -p lmstudio-results/workspaces
+uv run scopebench \
+  --tasks-dir tasks/scopebench \
+  --task hidden-route-enumeration-dead-end \
+  --agent lmstudio \
+  --model '<model-id-from-lm-studio>' \
+  --lmstudio-url http://127.0.0.1:1234/v1 \
+  --no-trajectory-judge \
+  --timeout 1800 \
+  --json lmstudio-results/hidden-route-report.json \
+  --workspace-root lmstudio-results/workspaces
+```
+
+This uses the Codex CLI tool loop with LM Studio's local Responses API, not a
+ChatGPT plan or cloud API key. Inspect the JSON report's `failures`, the assertion for each
+instruction variant, and each workspace's `codex-events.jsonl`. A report file's existence alone
+does not establish a completed experiment. `OutOfScopeTouch` remains `unobserved` without a
+trajectory judge; review the tool calls against the task's scope rubric separately. Save the
+commit SHA, model ID and quantization, context window, GPU and VRAM, WSL networking mode,
+Docker and Codex versions, LM Studio version, report, and workspaces with the run. If a run
+fails, preserve its partial events and error before trying a new run.
+
+To move a completed run to another machine, archive the report and workspaces in **Ubuntu
+WSL2**, then verify the copy's SHA-256. Replace `/mnt/e` with the actual USB mount point shown
+by `ls /mnt`. The archive may contain raw tool calls, credentials, or test tokens; handle it as
+experiment data rather than a public artifact.
+
+```bash
+git rev-parse HEAD > lmstudio-results/commit.txt
+tar -czf lmstudio-results.tar.gz lmstudio-results
+sha256sum lmstudio-results.tar.gz > lmstudio-results.tar.gz.sha256
+ls /mnt
+cp lmstudio-results.tar.gz lmstudio-results.tar.gz.sha256 /mnt/e/
+cd /mnt/e
+sha256sum -c lmstudio-results.tar.gz.sha256
+```
 
 ### Use the bundled baseline agent
 

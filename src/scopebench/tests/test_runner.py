@@ -122,6 +122,35 @@ def test_codex_uses_chatgpt_cli_and_host_ports(
     assert result.tool_calls[0].args == "pwd"
 
 
+def test_lmstudio_uses_local_responses_provider(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _mock_stack(monkeypatch)
+    seen_cmd: list[str] = []
+
+    def fake_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        seen_cmd.extend(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = run_task(
+        load_manifest(_task(tmp_path)),
+        RunOptions(
+            agent="lmstudio",
+            model="glm-5.3",
+            lmstudio_url="http://172.24.0.1:1234/v1",
+            workspace_root=tmp_path,
+        ),
+        "sb-lmstudio",
+    )
+    assert result.model == "lmstudio:glm-5.3"
+    assert "model_provider=scopebench_lmstudio" in seen_cmd
+    assert 'model_providers.scopebench_lmstudio.base_url="http://172.24.0.1:1234/v1"' in seen_cmd
+    assert 'model_providers.scopebench_lmstudio.wire_api="responses"' in seen_cmd
+    assert "model_providers.scopebench_lmstudio.requires_openai_auth=false" in seen_cmd
+    assert seen_cmd[seen_cmd.index("--model") + 1] == "glm-5.3"
+
+
 def test_codex_timeout_keeps_partial_events(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

@@ -79,6 +79,7 @@ class _Args(argparse.Namespace):
     agent: AgentKind = "harness"
     model: str | None = None
     daybreak: bool = False
+    lmstudio_url: str = "http://localhost:1234/v1"
     request_limit: int = 40
     timeout: float = 600.0
     wait_timeout: int = 180
@@ -124,6 +125,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  harness   the real agent-harness agent, sealed in the sandbox container\n"
             "            (default; needs the model provider's API key, e.g. ANTHROPIC_API_KEY)\n"
             "  codex     use the locally signed-in Codex CLI and ChatGPT plan on the host\n"
+            "  lmstudio  use Codex CLI with a local LM Studio model on the host\n"
             "  solution  run the task's reference solution.sh as a stand-in agent; it\n"
             "            should produce the flag, smoke-testing the whole pipeline\n"
             "            (compose + render + verify) without a model or API key\n"
@@ -155,7 +157,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _ = parser.add_argument(
         "--agent",
-        choices=["harness", "codex", "solution", "dry-run"],
+        choices=["harness", "codex", "lmstudio", "solution", "dry-run"],
         help="Agent strategy (default: harness — the real agent; see the list below).",
     )
     _ = parser.add_argument(
@@ -165,6 +167,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--daybreak",
         action="store_true",
         help="Request Daybreak for a Codex run (requires access).",
+    )
+    _ = parser.add_argument(
+        "--lmstudio-url",
+        help="LM Studio OpenAI-compatible base URL (default: http://localhost:1234/v1).",
     )
     _ = parser.add_argument("--request-limit", type=int, help="Max model requests per run.")
     _ = parser.add_argument("--timeout", type=float, help="Per-task agent time budget (s).")
@@ -279,6 +285,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.daybreak and args.agent != "codex":
         print("error: --daybreak requires --agent codex.", file=sys.stderr)
         return 2
+    if args.agent == "lmstudio" and not args.model:
+        print(
+            "error: --agent lmstudio requires --model from LM Studio's /v1/models.", file=sys.stderr
+        )
+        return 2
+    if args.lmstudio_url != "http://localhost:1234/v1" and args.agent != "lmstudio":
+        print("error: --lmstudio-url requires --agent lmstudio.", file=sys.stderr)
+        return 2
     if args.agent == "harness":
         effective_model = resolve_model(args.model)
         if not is_supported(effective_model):
@@ -345,6 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         agent=args.agent,
         model=args.model,
         daybreak=args.daybreak,
+        lmstudio_url=args.lmstudio_url,
         request_limit=args.request_limit,
         timeout=args.timeout,
         wait_timeout=args.wait_timeout,

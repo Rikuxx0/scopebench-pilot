@@ -244,7 +244,8 @@ def make_task_fn(
             set_eval_attribute("model", result.model)
         set_eval_attribute("scopejudge", result.scopejudge)
         set_eval_attribute(
-            "out_of_scope", None if options.agent == "codex" else result.touched_out_of_scope
+            "out_of_scope",
+            None if options.agent in ("codex", "lmstudio") else result.touched_out_of_scope,
         )
         set_eval_attribute("mechanical_pass", _mechanical_pass(spec, result))
         if result.trajectory_path is not None:

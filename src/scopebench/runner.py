@@ -31,7 +31,7 @@ from agent_sandbox import (
 )
 from scopebench.manifest import InstructionVariant, TaskManifest
 
-AgentKind = Literal["harness", "codex", "solution", "dry-run"]
+AgentKind = Literal["harness", "codex", "lmstudio", "solution", "dry-run"]
 
 _ASK_USER_REPLY = (
     "No human is available to answer. Proceed autonomously and stay strictly "
@@ -72,6 +72,7 @@ class RunOptions:
     agent: AgentKind = "harness"
     model: str | None = None
     daybreak: bool = False
+    lmstudio_url: str = "http://localhost:1234/v1"
     request_limit: int = 40
     timeout: float = 600.0
     wait_timeout: int = 180
@@ -121,7 +122,7 @@ def run_task(
         )
         with compose_stack.running(keep=options.keep_up) as port_map:
             context = render.build_template_context(topology)
-            if options.agent == "codex":
+            if options.agent in ("codex", "lmstudio"):
                 for host in topology.routes.edge_hosts:
                     host_port = port_map[host.service][host.port]
                     context[f"{host.service}_url_{host.port}"] = f"http://localhost:{host_port}"
@@ -137,7 +138,7 @@ def run_task(
             verify.clean_flag_targets(
                 manifest.verification,
                 workspace,
-                include_shared_tmp=options.agent != "codex",
+                include_shared_tmp=options.agent not in ("codex", "lmstudio"),
             )
 
             agent_outcome = _dispatch_agent(
@@ -160,7 +161,7 @@ def run_task(
                 script_env,
                 network_env,
                 compose_stack.backend_network_name(),
-                agent_in_container=options.agent in ("harness", "codex"),
+                agent_in_container=options.agent in ("harness", "codex", "lmstudio"),
             )
             return TaskResult(
                 slug=manifest.slug,
@@ -207,7 +208,7 @@ def _dispatch_agent(
         return _AgentOutcome()
     if options.agent == "solution":
         return _run_solution(manifest, script_env)
-    if options.agent == "codex":
+    if options.agent in ("codex", "lmstudio"):
         return _run_codex(options, workspace, instruction, topology, script_env)
     return _run_harness_container(
         options,
@@ -264,6 +265,19 @@ def _run_codex(
     ]
     if options.model:
         cmd[2:2] = ["--model", options.model]
+    if options.agent == "lmstudio":
+        cmd[2:2] = [
+            "-c",
+            "model_provider=scopebench_lmstudio",
+            "-c",
+            f"model_providers.scopebench_lmstudio.base_url={json.dumps(options.lmstudio_url)}",
+            "-c",
+            'model_providers.scopebench_lmstudio.name="LM Studio"',
+            "-c",
+            'model_providers.scopebench_lmstudio.wire_api="responses"',
+            "-c",
+            "model_providers.scopebench_lmstudio.requires_openai_auth=false",
+        ]
     if options.daybreak:
         cmd[2:2] = ["-c", "daybreak=true"]
     try:
@@ -305,7 +319,13 @@ def _run_codex(
             calls.append(ToolCall(name="bash", args=command))
     output = output_file.read_text(encoding="utf-8") if output_file.exists() else ""
     return _AgentOutcome(
-        model=options.model or "codex:default", output=output.strip(), tool_calls=calls
+        model=(
+            f"lmstudio:{options.model}"
+            if options.agent == "lmstudio"
+            else options.model or "codex:default"
+        ),
+        output=output.strip(),
+        tool_calls=calls,
     )
 
 

@@ -175,6 +175,19 @@ def test_main_codex_needs_no_provider_key(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert main(["--all", "--tasks-dir", str(_tasks_dir(tmp_path)), "--agent", "codex"]) == 0
 
 
+def test_main_lmstudio_requires_model_and_no_provider_key(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    _mock_eval(monkeypatch)
+    monkeypatch.setattr(cli, "_load_dotenv", _noop_dotenv)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    argv = ["--all", "--tasks-dir", str(_tasks_dir(tmp_path)), "--agent", "lmstudio"]
+    assert main(argv) == 2
+    assert "requires --model" in capsys.readouterr().err
+    assert main([*argv, "--model", "glm-5.3"]) == 0
+
+
 def test_main_harness_errors_without_openai_key(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
