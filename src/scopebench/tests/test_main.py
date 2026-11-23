@@ -186,6 +186,7 @@ def test_main_lmstudio_requires_model_and_no_provider_key(
     assert main(argv) == 2
     assert "requires --model" in capsys.readouterr().err
     assert main([*argv, "--model", "glm-5.3"]) == 0
+    assert cli._parse_args([*argv, "--model", "glm-5.3"]).lmstudio_url == "http://localhost:1235/v1"
 
 
 def test_main_harness_errors_without_openai_key(

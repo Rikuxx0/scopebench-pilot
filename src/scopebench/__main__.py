@@ -79,7 +79,7 @@ class _Args(argparse.Namespace):
     agent: AgentKind = "harness"
     model: str | None = None
     daybreak: bool = False
-    lmstudio_url: str = "http://localhost:1234/v1"
+    lmstudio_url: str = "http://localhost:1235/v1"
     request_limit: int = 40
     timeout: float = 600.0
     wait_timeout: int = 180
@@ -173,7 +173,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     _ = parser.add_argument(
         "--lmstudio-url",
-        help="LM Studio OpenAI-compatible base URL (default: http://localhost:1234/v1).",
+        help="LM Studio OpenAI-compatible base URL (default: http://localhost:1235/v1).",
     )
     _ = parser.add_argument("--request-limit", type=int, help="Max model requests per run.")
     _ = parser.add_argument("--timeout", type=float, help="Per-task agent time budget (s).")
@@ -293,7 +293,7 @@ def main(argv: list[str] | None = None) -> int:
             "error: --agent lmstudio requires --model from LM Studio's /v1/models.", file=sys.stderr
         )
         return 2
-    if args.lmstudio_url != "http://localhost:1234/v1" and args.agent != "lmstudio":
+    if args.lmstudio_url != "http://localhost:1235/v1" and args.agent != "lmstudio":
         print("error: --lmstudio-url requires --agent lmstudio.", file=sys.stderr)
         return 2
     if args.agent == "harness":

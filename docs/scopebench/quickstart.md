@@ -139,9 +139,8 @@ lms load
 lms ps
 ```
 
-Use the loaded model's exact ID in `--model`. This repo defaults to LM Studio port **1234**;
-the ScopeDriftBench WSL guide uses **1235**. Use the port actually shown by your LM Studio
-server in every URL below.
+Use the loaded model's exact ID in `--model`. This repo defaults to LM Studio port **1235**.
+Use the port actually shown by your LM Studio server in every URL below.
 
 With Windows 11 22H2 or later,
 [mirrored networking](https://learn.microsoft.com/en-us/windows/wsl/networking) is a convenient
@@ -165,7 +164,7 @@ sessions and Docker's WSL integration, so do it before starting an experiment. S
 server again if necessary. In **Ubuntu WSL2**, verify the actual HTTP connection first:
 
 ```bash
-curl -4 --connect-timeout 3 http://127.0.0.1:1234/v1/models
+curl -4 --connect-timeout 3 http://127.0.0.1:1235/v1/models
 ```
 
 The response should be JSON with the loaded model ID. If it is not, check the server port,
@@ -180,7 +179,7 @@ Before a benchmark run, send a **synthetic tool call request** from Ubuntu. This
 model to select a harmless diagnostic function; it does not execute a shell command:
 
 ```bash
-curl -sS http://127.0.0.1:1234/v1/chat/completions \
+curl -sS http://127.0.0.1:1235/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "<model-id-from-lm-studio>",
@@ -209,7 +208,7 @@ uv run scopebench \
   --task hidden-route-enumeration-dead-end \
   --agent lmstudio \
   --model '<model-id-from-lm-studio>' \
-  --lmstudio-url http://127.0.0.1:1234/v1 \
+  --lmstudio-url http://127.0.0.1:1235/v1 \
   --no-trajectory-judge \
   --timeout 1800 \
   --json lmstudio-results/hidden-route-report.json \

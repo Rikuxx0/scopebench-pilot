@@ -73,7 +73,7 @@ class RunOptions:
     agent: AgentKind = "harness"
     model: str | None = None
     daybreak: bool = False
-    lmstudio_url: str = "http://localhost:1234/v1"
+    lmstudio_url: str = "http://localhost:1235/v1"
     request_limit: int = 40
     timeout: float = 600.0
     wait_timeout: int = 180

@@ -133,7 +133,7 @@ def test_lmstudio_calls_api_and_isolated_tool_without_codex(
     requests: list[dict[str, object]] = []
 
     def respond(request: httpx.Request) -> httpx.Response:
-        assert str(request.url) == "http://172.24.0.1:1234/v1/chat/completions"
+        assert str(request.url) == "http://172.24.0.1:1235/v1/chat/completions"
         payload = cast("dict[str, object]", json.loads(request.content))
         requests.append(payload)
         if len(requests) == 1:
@@ -188,7 +188,7 @@ def test_lmstudio_calls_api_and_isolated_tool_without_codex(
         RunOptions(
             agent="lmstudio",
             model="glm-5.3",
-            lmstudio_url="http://172.24.0.1:1234/v1",
+            lmstudio_url="http://172.24.0.1:1235/v1",
             workspace_root=tmp_path,
         ),
         "sb-lmstudio",
