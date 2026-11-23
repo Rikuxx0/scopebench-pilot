@@ -125,7 +125,7 @@ def _build_parser() -> argparse.ArgumentParser:
             "  harness   the real agent-harness agent, sealed in the sandbox container\n"
             "            (default; needs the model provider's API key, e.g. ANTHROPIC_API_KEY)\n"
             "  codex     use the locally signed-in Codex CLI and ChatGPT plan on the host\n"
-            "  lmstudio  use Codex CLI with a local LM Studio model on the host\n"
+            "  lmstudio  use LM Studio Chat Completions with tools in the Docker sandbox\n"
             "  solution  run the task's reference solution.sh as a stand-in agent; it\n"
             "            should produce the flag, smoke-testing the whole pipeline\n"
             "            (compose + render + verify) without a model or API key\n"
@@ -161,7 +161,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Agent strategy (default: harness — the real agent; see the list below).",
     )
     _ = parser.add_argument(
-        "--model", help="Model override (provider:model for harness; Codex model name for codex)."
+        "--model",
+        help=(
+            "Model override: provider:model for harness, Codex model name, or LM Studio model ID."
+        ),
     )
     _ = parser.add_argument(
         "--daybreak",

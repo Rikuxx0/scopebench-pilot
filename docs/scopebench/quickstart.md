@@ -47,22 +47,19 @@ Keep this checkout in the WSL Linux filesystem (for example `~/projects/scopeben
 not under `/mnt/c`: the task containers bind mount files from the checkout. In Ubuntu, install
 Git and `curl`, then install `uv` using its
 [Linux installer](https://docs.astral.sh/uv/getting-started/installation/).
-Install Node.js/npm in Ubuntu and use npm to install the Codex CLI. Check the versions before
-running a task:
+Check the versions before running a task:
 
 ```bash
 sudo apt update
-sudo apt install -y git curl ca-certificates nodejs npm
+sudo apt install -y git curl ca-certificates
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.13
-npm install -g @openai/codex@latest
 mkdir -p ~/projects
 cd ~/projects
 git clone https://github.com/Rikuxx0/scopebench-pilot.git
 cd scopebench-pilot
 uv sync --frozen
 uv run python --version
-codex --version
 git rev-parse HEAD
 ```
 
@@ -70,6 +67,8 @@ Open a new Ubuntu shell if `uv` is not yet on `PATH`. ScopeBench needs Python **
 source WSL guide's Python 3.12 minimum applies to ScopeDriftBench, not this repository. Record
 the commit SHA with the experiment results. Do not start another benchmark run or change Docker
 settings while a run is active.
+The `lmstudio` strategy needs no Codex CLI, Node.js, ChatGPT sign-in, or cloud API key. Install
+Codex CLI separately only if you choose `--agent codex`.
 
 ## Run the controls
 
@@ -177,14 +176,6 @@ address reachable from WSL, and use `http://<Windows-address>:<port>/v1` instead
 the necessary source and port in Windows Firewall. Binding beyond localhost exposes the model
 server to that network, so use a trusted interface or enable authentication.
 
-Check the Responses API that Codex uses from Ubuntu:
-
-```bash
-curl -sS http://127.0.0.1:1234/v1/responses \
-  -H 'Content-Type: application/json' \
-  -d '{"model":"<model-id-from-lm-studio>","input":"Reply with ready."}'
-```
-
 Before a benchmark run, send a **synthetic tool call request** from Ubuntu. This asks the
 model to select a harmless diagnostic function; it does not execute a shell command:
 
@@ -206,9 +197,8 @@ curl -sS http://127.0.0.1:1234/v1/chat/completions \
 Check `choices[0].message.tool_calls` in the response. If the API rejects the request or the
 model cannot produce a valid tool call, resolve that before running an agent. If you use a
 different URL, change it in this check and in `--lmstudio-url` below. This diagnostic checks
-LM Studio's Chat Completions tool interface; the Codex agent also needs its Responses tool
-interface to work with the selected model. Set enough context for an agent workload (LM Studio
-recommends more than about 25,000 tokens for Codex).
+LM Studio's Chat Completions tool interface, which the `lmstudio` agent uses directly. Set enough
+context for a multi-step agent workload.
 
 Create a results directory and run one task from **Ubuntu WSL2**:
 
@@ -226,13 +216,15 @@ uv run scopebench \
   --workspace-root lmstudio-results/workspaces
 ```
 
-This uses the Codex CLI tool loop with LM Studio's local Responses API, not a
-ChatGPT plan or cloud API key. Inspect the JSON report's `failures`, the assertion for each
+This uses Python's HTTP client and LM Studio's local Chat Completions API. Tool commands run in
+the existing isolated Docker edge container, not on the WSL host. No Codex CLI, ChatGPT plan, or
+cloud API key is needed. The raw trace is `lmstudio-events.jsonl` in each workspace. Inspect the
+JSON report's `failures`, the assertion for each
 instruction variant, and each workspace's `codex-events.jsonl`. A report file's existence alone
 does not establish a completed experiment. `OutOfScopeTouch` remains `unobserved` without a
 trajectory judge; review the tool calls against the task's scope rubric separately. Save the
 commit SHA, model ID and quantization, context window, GPU and VRAM, WSL networking mode,
-Docker and Codex versions, LM Studio version, report, and workspaces with the run. If a run
+Docker and LM Studio versions, report, and workspaces with the run. If a run
 fails, preserve its partial events and error before trying a new run.
 
 To move a completed run to another machine, archive the report and workspaces in **Ubuntu

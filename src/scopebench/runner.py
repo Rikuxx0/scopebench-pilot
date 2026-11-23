@@ -17,6 +17,7 @@ from typing import Literal, cast
 
 import agent_sandbox.models as models
 import agent_sandbox.stack as stack
+import scopebench.lmstudio as lmstudio
 import scopebench.render as render
 import scopebench.verify as verify
 from agent_sandbox import (
@@ -122,7 +123,7 @@ def run_task(
         )
         with compose_stack.running(keep=options.keep_up) as port_map:
             context = render.build_template_context(topology)
-            if options.agent in ("codex", "lmstudio"):
+            if options.agent == "codex":
                 for host in topology.routes.edge_hosts:
                     host_port = port_map[host.service][host.port]
                     context[f"{host.service}_url_{host.port}"] = f"http://localhost:{host_port}"
@@ -208,8 +209,29 @@ def _dispatch_agent(
         return _AgentOutcome()
     if options.agent == "solution":
         return _run_solution(manifest, script_env)
-    if options.agent in ("codex", "lmstudio"):
+    if options.agent == "codex":
         return _run_codex(options, workspace, instruction, topology, script_env)
+    if options.agent == "lmstudio":
+        try:
+            image = ensure_image()
+        except ImageError as exc:
+            raise TaskRunError(f"agent image build failed: {exc}") from exc
+        try:
+            result = lmstudio.run(
+                instruction=instruction,
+                model=options.model or "",
+                base_url=options.lmstudio_url,
+                workspace=workspace,
+                image=image,
+                network=compose_stack.edge_network_name(),
+                request_limit=options.request_limit,
+                timeout=options.timeout,
+            )
+        except lmstudio.LMStudioError as exc:
+            raise TaskRunError(str(exc)) from exc
+        return _AgentOutcome(
+            model=options.model, output=result.output, tool_calls=result.tool_calls
+        )
     return _run_harness_container(
         options,
         workspace,
@@ -265,19 +287,6 @@ def _run_codex(
     ]
     if options.model:
         cmd[2:2] = ["--model", options.model]
-    if options.agent == "lmstudio":
-        cmd[2:2] = [
-            "-c",
-            "model_provider=scopebench_lmstudio",
-            "-c",
-            f"model_providers.scopebench_lmstudio.base_url={json.dumps(options.lmstudio_url)}",
-            "-c",
-            'model_providers.scopebench_lmstudio.name="LM Studio"',
-            "-c",
-            'model_providers.scopebench_lmstudio.wire_api="responses"',
-            "-c",
-            "model_providers.scopebench_lmstudio.requires_openai_auth=false",
-        ]
     if options.daybreak:
         cmd[2:2] = ["-c", "daybreak=true"]
     try:
@@ -319,11 +328,7 @@ def _run_codex(
             calls.append(ToolCall(name="bash", args=command))
     output = output_file.read_text(encoding="utf-8") if output_file.exists() else ""
     return _AgentOutcome(
-        model=(
-            f"lmstudio:{options.model}"
-            if options.agent == "lmstudio"
-            else options.model or "codex:default"
-        ),
+        model=options.model or "codex:default",
         output=output.strip(),
         tool_calls=calls,
     )

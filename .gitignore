@@ -23,6 +23,7 @@ site/
 
 # ScopeBench runner artifacts
 .scopebench-runs/
+lmstudio-results/
 *.report.json
 
 # macOS metadata

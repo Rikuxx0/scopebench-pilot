@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import inspect
+import json
 import subprocess
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import override
+from typing import cast, override
 
+import httpx
 import pytest
 
 import scopebench.verify as verify
 from agent_harness import HarnessSettings
 from agent_sandbox import AgentConfig, AgentResult, ImageError, ToolCall, stack
-from scopebench import runner
+from scopebench import lmstudio, runner
 from scopebench.manifest import InstructionVariant, load_manifest
 from scopebench.runner import RunOptions, TaskRunError, run_task
 
@@ -122,17 +124,65 @@ def test_codex_uses_chatgpt_cli_and_host_ports(
     assert result.tool_calls[0].args == "pwd"
 
 
-def test_lmstudio_uses_local_responses_provider(
+def test_lmstudio_calls_api_and_isolated_tool_without_codex(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _mock_stack(monkeypatch)
-    seen_cmd: list[str] = []
+    monkeypatch.setattr(runner, "ensure_image", lambda: "sandbox:image")
+    real_client = httpx.Client
+    requests: list[dict[str, object]] = []
 
-    def fake_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        seen_cmd.extend(cmd)
-        return subprocess.CompletedProcess(cmd, 0, stdout="")
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "http://172.24.0.1:1234/v1/chat/completions"
+        payload = cast("dict[str, object]", json.loads(request.content))
+        requests.append(payload)
+        if len(requests) == 1:
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": None,
+                                "tool_calls": [
+                                    {
+                                        "id": "call_1",
+                                        "type": "function",
+                                        "function": {"name": "bash", "arguments": '{"cmd":"pwd"}'},
+                                    }
+                                ],
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ]
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"role": "assistant", "content": "done"}, "finish_reason": "stop"}
+                ]
+            },
+        )
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    def client(**_kw: object) -> httpx.Client:
+        return real_client(transport=httpx.MockTransport(respond))
+
+    monkeypatch.setattr(httpx, "Client", client)
+    tools: list[tuple[str, str]] = []
+
+    def isolated(command: str, **kwargs: object) -> str:
+        tools.append((command, str(kwargs["network"])))
+        return "/work\n"
+
+    monkeypatch.setattr(lmstudio, "_tool_result", isolated)
+
+    def no_codex(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        pytest.fail(f"unexpected subprocess: {cmd}")
+
+    monkeypatch.setattr(subprocess, "run", no_codex)
     result = run_task(
         load_manifest(_task(tmp_path)),
         RunOptions(
@@ -143,12 +193,25 @@ def test_lmstudio_uses_local_responses_provider(
         ),
         "sb-lmstudio",
     )
-    assert result.model == "lmstudio:glm-5.3"
-    assert "model_provider=scopebench_lmstudio" in seen_cmd
-    assert 'model_providers.scopebench_lmstudio.base_url="http://172.24.0.1:1234/v1"' in seen_cmd
-    assert 'model_providers.scopebench_lmstudio.wire_api="responses"' in seen_cmd
-    assert "model_providers.scopebench_lmstudio.requires_openai_auth=false" in seen_cmd
-    assert seen_cmd[seen_cmd.index("--model") + 1] == "glm-5.3"
+    assert result.model == "glm-5.3"
+    assert result.output == "done"
+    assert tools == [("pwd", "sb-lmstudio_edge")]
+    assert requests[0]["model"] == "glm-5.3"
+    assert cast("list[object]", requests[1]["messages"])[-1] == {
+        "role": "tool",
+        "tool_call_id": "call_1",
+        "content": "/work\n",
+    }
+    events = tmp_path / "sb-lmstudio" / "lmstudio-events.jsonl"
+    assert [json.loads(line)["type"] for line in events.read_text().splitlines()] == [
+        "start",
+        "request",
+        "response",
+        "tool_result",
+        "request",
+        "response",
+        "final",
+    ]
 
 
 def test_codex_timeout_keeps_partial_events(

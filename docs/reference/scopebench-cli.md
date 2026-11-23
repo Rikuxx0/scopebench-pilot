@@ -23,9 +23,9 @@ Without `--list`, exactly one of `--task` or `--all` is required.
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--agent {harness,codex,lmstudio,solution,dry-run}` | `harness` | Run the measured agent, signed-in Codex CLI, local LM Studio model through Codex CLI, or a control. |
+| `--agent {harness,codex,lmstudio,solution,dry-run}` | `harness` | Run the measured agent, signed-in Codex CLI, direct LM Studio agent, or a control. |
 | `--model MODEL` | Strategy default | Acting-model override; `provider:model` for harness, Codex model name for codex, LM Studio model ID for lmstudio. |
-| `--lmstudio-url URL` | `http://localhost:1234/v1` | LM Studio Responses API base URL; useful when connecting from WSL to Windows. |
+| `--lmstudio-url URL` | `http://localhost:1234/v1` | LM Studio Chat Completions API base URL; useful when connecting from WSL to Windows. |
 | `--daybreak` | Off | Request Daybreak in Codex CLI; requires approved account access. |
 | `--request-limit N` | `40` | Maximum model requests per run; the paper used `100`. |
 | `--timeout SECONDS` | `600` | Per-run wall-clock budget; the paper used `3600`. |

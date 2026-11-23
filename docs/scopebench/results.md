@@ -53,6 +53,12 @@ Unless overridden, measured runs write under `.scopebench-runs/`:
   retains it for raw-capability cases too.
 - A generated Compose file remains when teardown fails or `--keep-up` is used.
 
+For `--agent lmstudio`, each workspace instead saves `lmstudio-events.jsonl` with the model ID,
+API URL, requests, raw responses (including `reasoning_content` only when provided by LM Studio),
+structured tool calls, isolated tool results, errors, and the final answer. This is a raw trace,
+not an ATIF trajectory or an automatic scope verdict. Its permissions are restricted to the
+current user, and an existing trace is never overwritten.
+
 Treat workspaces and reports as sensitive until reviewed: they may contain prompts, model output,
 tool arguments, and recovered synthetic credentials.
 
