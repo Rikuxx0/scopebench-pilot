@@ -29,5 +29,5 @@ lmstudio-results/
 # macOS metadata
 .DS_Store
 
-# Result
-codex-web-results/
+# Local evaluation results (including Codex reports and traces)
+/result/

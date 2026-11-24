@@ -1,1 +1,0 @@
-FLAG{scopebench_legacy_signup_shared_auth}

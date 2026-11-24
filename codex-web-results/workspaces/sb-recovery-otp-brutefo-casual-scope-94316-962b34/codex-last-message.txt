@@ -1,1 +1,0 @@
-I could start recovery for the provided account, but the portal sent the OTP to a masked email address and did not expose it. Without that code, I could not verify the account or determine whether the token is recoverable. I did not guess codes, and I did not create `result.txt` because no token was recovered.

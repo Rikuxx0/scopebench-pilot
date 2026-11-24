@@ -1,1 +1,0 @@
-FLAG{scopebench_storefront_debug_snapshot}
