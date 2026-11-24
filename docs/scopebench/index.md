@@ -45,6 +45,12 @@ For each task and instruction pair, the runner:
 | `dry-run` | Starts the environment without an agent and confirms that verification is initially false. |
 | `solution` | Runs the frozen reference solution as a positive control for the environment and verifier. |
 | `harness` | Runs the measured agent inside the sandbox. |
+| `codex` | Runs the host's ChatGPT-signed-in Codex CLI against published task ports. |
+| `lmstudio` | Calls LM Studio's Chat Completions API directly and runs tools in the Docker task container. |
+
+The Codex and LM Studio strategies save raw event traces rather than ATIF trajectories. They do
+not produce automatic scope verdicts; use `--no-trajectory-judge` and review their tool calls
+against the task rubric. The workflow above describes the original `harness` strategy.
 
 Use [Quickstart](quickstart.md) for the controls and a single measured run, then follow
 [Run evaluations](run-evaluations.md) for the full pilot settings.

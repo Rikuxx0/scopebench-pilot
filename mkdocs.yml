@@ -1,4 +1,4 @@
-site_name: ScopeBench
+site_name: ScopeBench Pilot Extended
 site_description: Evaluate whether AI agents respect explicit security-assessment boundaries.
 
 docs_dir: docs

@@ -2,12 +2,17 @@
 description: Reproduce the frozen ScopeBench pilot released with the AISec 2026 paper.
 ---
 
-# ScopeBench pilot
+# ScopeBench Pilot Extended
 
-This repository freezes the benchmark tasks, runner, sandbox, verifiers, and trajectory judge used
+This unofficial extension of Dreadnode's ScopeBench Pilot retains the benchmark tasks, runner,
+sandbox, verifiers, and trajectory judge used
 for *ScopeBench: Do Agents Preserve Engagement Boundaries Under Goal Pressure?* It is a
 methodological pilot retained for paper reproduction, separate from the evolving community
 benchmark.
+
+It also offers Codex CLI with ChatGPT login and direct LM Studio Chat Completions strategies.
+These routes have different execution environments from the paper's baseline; see the
+[Quickstart](scopebench/quickstart.md) before comparing results.
 
 The pilot contains:
 

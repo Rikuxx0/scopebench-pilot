@@ -1,7 +1,7 @@
 [project]
 name = "agent-harness"
 version = "0.1.0"
-description = "ScopeBench evaluations with a hardened agent sandbox and PydanticAI harness."
+description = "ScopeBench Pilot Extended: unofficial fork with Codex CLI and LM Studio agent options."
 readme = "README.md"
 authors = [{ name = "dreadnode" }]
 requires-python = ">=3.13"

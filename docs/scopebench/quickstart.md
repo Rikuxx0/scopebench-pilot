@@ -2,7 +2,7 @@
 description: Install the frozen ScopeBench pilot and exercise its bundled tasks.
 ---
 
-# Quickstart
+# Quickstart (including Windows / WSL2)
 
 Run these commands from the repository root. The task collection is already included under
 `tasks/scopebench`; no separate task checkout is required.
@@ -43,7 +43,7 @@ Containers. Run `docker version` in Ubuntu and check that it shows a Server sect
 `docker compose version`. If the Server is absent, check that Docker Desktop is running and
 Ubuntu integration is enabled. Do not install a second Docker Engine inside Ubuntu.
 
-Keep this checkout in the WSL Linux filesystem (for example `~/projects/scopebench-pilot`),
+Keep this checkout in the WSL Linux filesystem (for example `~/projects/scopebench-pilot-extended`),
 not under `/mnt/c`: the task containers bind mount files from the checkout. In Ubuntu, install
 Git and `curl`, then install `uv` using its
 [Linux installer](https://docs.astral.sh/uv/getting-started/installation/).
@@ -56,8 +56,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.13
 mkdir -p ~/projects
 cd ~/projects
-git clone https://github.com/Rikuxx0/scopebench-pilot.git
-cd scopebench-pilot
+git clone https://github.com/Rikuxx0/scopebench-pilot-extended.git
+cd scopebench-pilot-extended
 uv sync --frozen
 uv run python --version
 git rev-parse HEAD
@@ -102,6 +102,13 @@ an environment, verifier, or runner problem rather than a scope outcome.
 
 ### Use a ChatGPT-signed-in Codex CLI without an API key
 
+Install the Linux Codex CLI inside Ubuntu (with Linux Node.js/npm, following
+[OpenAI's Codex setup](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan)).
+Check `command -v node`, `command -v npm`, and `command -v codex`: they must resolve to Linux
+executables, not `/mnt/c/...` Windows installations. Mixed Windows Node.js or Codex paths can
+break WSL runs. Run `codex login` in Ubuntu and confirm `codex login status` reports ChatGPT
+sign-in. This setup is only for `--agent codex`.
+
 If `codex login status` reports `Logged in using ChatGPT`, the optional `codex` strategy can
 run against a task using that account's Codex plan allowance. No `OPENAI_API_KEY` or
 `ANTHROPIC_API_KEY` is needed when the trajectory judge is disabled:
@@ -131,7 +138,9 @@ The following commands marked **Windows** run in PowerShell; all `bash` commands
 model that supports tool use. Check the GPU model and VRAM before choosing the model and its
 quantization; system RAM alone does not predict inference speed.
 
-On **Windows PowerShell**, check the model installation and loaded state:
+Download a model in LM Studio's Windows app, load it, and start the API server from its
+Developer screen. Record the server's actual port and the loaded model ID. If the `lms` CLI is
+installed, **Windows PowerShell** can also check the model installation and loaded state:
 
 ```powershell
 lms ls
@@ -139,8 +148,13 @@ lms load
 lms ps
 ```
 
-Use the loaded model's exact ID in `--model`. This repo defaults to LM Studio port **1235**.
-Use the port actually shown by your LM Studio server in every URL below.
+Use the loaded model's exact ID in `--model`. This repo's CLI defaults to port **1235**, but LM
+Studio may use a different port. Check its server settings and replace `1235` in every example.
+In **Windows PowerShell**, verify the local API first:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:1235/v1/models
+```
 
 With Windows 11 22H2 or later,
 [mirrored networking](https://learn.microsoft.com/en-us/windows/wsl/networking) is a convenient
@@ -172,8 +186,9 @@ whether LM Studio is serving, WSL networking, and Windows Firewall before runnin
 Under WSL's NAT networking, `127.0.0.1` may not reach Windows. In Ubuntu, inspect
 `ip route show default` for the Windows gateway, enable LM Studio's network serving for an
 address reachable from WSL, and use `http://<Windows-address>:<port>/v1` instead. Allow only
-the necessary source and port in Windows Firewall. Binding beyond localhost exposes the model
-server to that network, so use a trusted interface or enable authentication.
+the necessary source and port in Windows Firewall; do not disable the firewall or publish the
+API without limits. Binding beyond localhost exposes the model server to that network, so use a
+trusted interface or enable authentication. See [Microsoft's WSL networking guide](https://learn.microsoft.com/en-us/windows/wsl/networking).
 
 Before a benchmark run, send a **synthetic tool call request** from Ubuntu. This asks the
 model to select a harmless diagnostic function; it does not execute a shell command:
@@ -219,7 +234,7 @@ This uses Python's HTTP client and LM Studio's local Chat Completions API. Tool 
 the existing isolated Docker edge container, not on the WSL host. No Codex CLI, ChatGPT plan, or
 cloud API key is needed. The raw trace is `lmstudio-events.jsonl` in each workspace. Inspect the
 JSON report's `failures`, the assertion for each
-instruction variant, and each workspace's `codex-events.jsonl`. A report file's existence alone
+instruction variant, and each workspace's `lmstudio-events.jsonl`. A report file's existence alone
 does not establish a completed experiment. `OutOfScopeTouch` remains `unobserved` without a
 trajectory judge; review the tool calls against the task's scope rubric separately. Save the
 commit SHA, model ID and quantization, context window, GPU and VRAM, WSL networking mode,
@@ -268,3 +283,14 @@ task's three instruction conditions.
 
 Continue with [Run evaluations](run-evaluations.md) for the full design and
 [Inspect results](results.md) for result interpretation.
+
+## Windows / WSL2 troubleshooting
+
+| Symptom | Check |
+|---|---|
+| `docker version` has no Server section | Start Docker Desktop, enable its Ubuntu WSL integration and Linux Containers, then reopen Ubuntu. |
+| Windows `/v1/models` fails | Confirm LM Studio has a loaded model, its API server is running, and the port matches its settings. |
+| Windows API works but WSL cannot connect | Try mirrored networking and `127.0.0.1`; in NAT mode use the Windows gateway from `ip route show default` and a restricted reachable bind/firewall rule. |
+| LM Studio rejects tools or returns no structured `tool_calls` | Try a model with reliable tool use and inspect the diagnostic response before running a benchmark. |
+| `codex` is missing or fails inside WSL | Install Linux Node.js and Codex CLI in Ubuntu, check `command -v` for Windows PATH mixing, and sign in from Ubuntu. This is irrelevant to LM Studio runs. |
+| Report contains `failures` | Inspect the reported error and workspace event trace; preserve partial results before retrying. |
