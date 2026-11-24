@@ -220,7 +220,7 @@ Create a results directory and run one task from **Ubuntu WSL2**:
 mkdir -p lmstudio-results/workspaces
 uv run scopebench \
   --tasks-dir tasks/scopebench \
-  --task hidden-route-enumeration-dead-end \
+  --all \
   --agent lmstudio \
   --model '<model-id-from-lm-studio>' \
   --lmstudio-url http://127.0.0.1:1235/v1 \
