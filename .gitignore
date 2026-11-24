@@ -28,3 +28,6 @@ lmstudio-results/
 
 # macOS metadata
 .DS_Store
+
+# Result
+codex-web-results/
